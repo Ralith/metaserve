@@ -133,11 +133,10 @@ fn run(log: Logger, options: Opt) -> Result<()> {
         match conn.connection.protocol().as_ref().map(|x| -> &[u8] { &x }) {
             Some(ms::HEARTBEAT_PROTOCOL) => tokio_current_thread::spawn(do_heartbeat(
                 log.clone(),
-                remote,
                 state.clone(),
-                conn.incoming,
+                conn
             )),
-            Some(ms::CLIENT_PROTOCOL) => tokio_current_thread::spawn(do_client(log.clone(), state.clone(), conn.connection)),
+            Some(ms::CLIENT_PROTOCOL) => tokio_current_thread::spawn(do_client(log.clone(), state.clone(), conn)),
             None => {
                 info!(log, "attempted connection with missing ALPN");
             }
@@ -152,19 +151,23 @@ fn run(log: Logger, options: Opt) -> Result<()> {
 
 fn do_heartbeat(
     log: Logger,
-    addr: SocketAddr,
     state: Rc<RefCell<State>>,
-    incoming: impl Stream<Item = quinn::NewStream, Error = quinn::ConnectionError>,
+    conn: quinn::NewConnection,
 ) -> impl Future<Item = (), Error = ()> {
     info!(log, "heartbeat established");
-    incoming.map_err(|e| -> Error { e.context("connection lost").into() })
+    let addr = conn.connection.remote_address();
+    let connection = conn.connection;
+    conn.incoming.map_err(|e| -> Option<Error> { Some(e.context("connection lost").into()) })
         .and_then(|stream| {
             let stream = match stream {
                 quinn::NewStream::Uni(stream) => stream,
                 quinn::NewStream::Bi(_) => unreachable!(), // config.max_remote_bi_streams is defaulted to 0
             };
             quinn::read_to_end(stream, ms::MAX_HEARTBEAT_SIZE)
-                .map_err(Into::into)
+                .or_else(|e| match e {
+                    quinn::ReadError::Finished => Err(None),
+                    _ => Err(Some(e.into())),
+                })
         })
         .and_then({ let state = state.clone(); move |(_, buf)| {
             state.borrow_mut().servers.insert(addr, buf.to_vec());
@@ -173,16 +176,24 @@ fn do_heartbeat(
     // Process at most one update per second
         .for_each(|()| tokio::timer::Delay::new(Instant::now() + Duration::from_secs(1)).map_err(|_| unreachable!()))
         .map_err({ let state = state.clone(); move |e| {
-            info!(log, "heartbeat lost: {reason}", reason=e.pretty().to_string());
-            state.borrow_mut().servers.remove(&addr);
+            match e {
+                Some(e) => {
+                    info!(log, "heartbeat lost: {reason}", reason=e.pretty().to_string());
+                    state.borrow_mut().servers.remove(&addr);
+                }
+                None => {
+                    info!(log, "closing connection due to oversized heartbeat");
+                    connection.close(1, b"oversized heartbeat");
+                }
+            }
         }})
 }
 
-fn do_client(log: Logger, state: Rc<RefCell<State>>, conn: quinn::Connection) -> impl Future<Item = (), Error = ()> {
+fn do_client(log: Logger, state: Rc<RefCell<State>>, conn: quinn::NewConnection) -> impl Future<Item = (), Error = ()> {
     info!(log, "client connected");
     future::loop_fn((), move |()| {
         let state = state.clone();
-        conn.open_uni()
+        conn.connection.open_uni()
             .map_err(Into::into)
             .and_then(move |stream| {
                 let state = state.borrow();
