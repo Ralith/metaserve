@@ -1,0 +1,17 @@
+[package]
+name = "daemon"
+version = "0.1.0"
+authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
+
+[dependencies]
+quinn = { git = "https://github.com/djc/quinn.git", branch = "dangerous-configuration" }
+tokio = "0.1.11"
+tokio-current-thread = "0.1"
+futures = "0.1"
+masterserve-proto = { path = "../proto" }
+slog = "2.1"
+slog-term = "2"
+structopt = "0.2.12"
+failure = "0.1"
+rustls = "0.14"
+bincode = "1.0.1"

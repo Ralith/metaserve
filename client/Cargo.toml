@@ -1,0 +1,21 @@
+[package]
+name = "masterserve-client"
+version = "0.1.0"
+authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
+
+[dependencies]
+quinn = { git = "https://github.com/djc/quinn.git", branch = "dangerous-configuration" }
+futures = "0.1"
+masterserve-proto = { path = "../proto" }
+bincode = "1.0.1"
+tokio = "0.1"
+failure = "0.1"
+
+[dev-dependencies]
+tokio-current-thread = "0.1"
+rustls = "0.14"
+structopt = "0.2.12"
+
+[[example]]
+name = "print"
+required-features = ["quinn/dangerous_configuration"]
