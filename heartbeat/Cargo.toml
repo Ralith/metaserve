@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
 
 [dependencies]
-quinn = { git = "https://github.com/djc/quinn.git", branch = "dangerous-configuration" }
+quinn = { git = "https://github.com/djc/quinn.git" }
 futures = "0.1"
 masterserve-proto = { path = "../proto" }
 tokio = "0.1"
