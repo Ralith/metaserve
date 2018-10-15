@@ -150,8 +150,6 @@ fn run(log: Logger, options: Opt) -> Result<()> {
     Ok(())
 }
 
-const MAX_HEARTBEAT_SIZE: usize = 8 * 1024;
-
 fn do_heartbeat(
     log: Logger,
     addr: SocketAddr,
@@ -165,12 +163,11 @@ fn do_heartbeat(
                 quinn::NewStream::Uni(stream) => stream,
                 quinn::NewStream::Bi(_) => unreachable!(), // config.max_remote_bi_streams is defaulted to 0
             };
-            quinn::read_to_end(stream, MAX_HEARTBEAT_SIZE)
+            quinn::read_to_end(stream, ms::MAX_HEARTBEAT_SIZE)
                 .map_err(Into::into)
         })
         .and_then({ let state = state.clone(); move |(_, buf)| {
-            let heartbeat = bincode::deserialize::<ms::Heartbeat>(&buf).context("malformed heartbeat")?;
-            state.borrow_mut().servers.insert(addr, heartbeat.info.into());
+            state.borrow_mut().servers.insert(addr, buf.to_vec());
             Ok(())
         }})
     // Process at most one update per second

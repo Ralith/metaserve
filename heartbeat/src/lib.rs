@@ -1,7 +1,6 @@
 extern crate quinn;
 extern crate futures;
 extern crate masterserve_proto as ms;
-extern crate bincode;
 extern crate tokio;
 #[macro_use]
 extern crate failure;
@@ -10,8 +9,8 @@ use std::{io, time::{Instant, Duration}};
 
 use futures::{Future, Stream};
 
-/// ALPN protcol identifier that must be used for heartbeat connections.
 pub use ms::HEARTBEAT_PROTOCOL as PROTOCOL;
+pub use ms::MAX_HEARTBEAT_SIZE;
 
 #[derive(Debug, Fail)]
 pub enum Error {
@@ -31,11 +30,11 @@ pub fn run<S: Stream<Item=T, Error=()>, T: AsRef<[u8]>>(
 ) -> impl Future<Item=(), Error=Error> {
     heartbeats
         .map_err(|()| None)
-        .for_each(move |x| {
+        .for_each(move |heartbeat| {
             connection.connection.open_uni()
                 .map_err(|x| Error::Io(x.into()))
                 .and_then(move |stream| {
-                    tokio::io::write_all(stream, bincode::serialize(&ms::Heartbeat { info: x.as_ref() }).unwrap())
+                    tokio::io::write_all(stream, heartbeat)
                         .and_then(|(stream, _)| tokio::io::shutdown(stream))
                         .map_err(|x| Error::Io(x.into()))
                 })

@@ -15,7 +15,6 @@ use byteorder::{ByteOrder, LE};
 use quinn::Read;
 use bytes::{Bytes, BytesMut};
 
-/// ALPN protcol identifier that must be used for client connections.
 pub use ms::CLIENT_PROTOCOL as PROTOCOL;
 
 #[derive(Debug, Fail)]

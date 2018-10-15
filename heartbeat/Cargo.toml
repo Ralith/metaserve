@@ -7,7 +7,6 @@ authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
 quinn = { git = "https://github.com/djc/quinn.git", branch = "dangerous-configuration" }
 futures = "0.1"
 masterserve-proto = { path = "../proto" }
-bincode = "1.0.1"
 tokio = "0.1"
 failure = "0.1"
 
