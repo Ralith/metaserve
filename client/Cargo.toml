@@ -10,6 +10,8 @@ masterserve-proto = { path = "../proto" }
 bincode = "1.0.1"
 tokio = "0.1"
 failure = "0.1"
+bytes = "0.4"
+byteorder = "1.2"
 
 [dev-dependencies]
 tokio-current-thread = "0.1"

@@ -11,6 +11,7 @@ extern crate bincode;
 extern crate masterserve_proto as ms;
 extern crate rustls;
 extern crate slog_term;
+extern crate byteorder;
 
 use std::{
     cell::RefCell, collections::HashMap, fmt, fs, io, net::SocketAddr, path::PathBuf, rc::Rc,
@@ -22,6 +23,7 @@ use futures::{Future, Stream, future::{self, Loop}};
 use rustls::internal::pemfile;
 use slog::{Drain, Logger};
 use structopt::StructOpt;
+use byteorder::{ByteOrder, LE};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -148,6 +150,8 @@ fn run(log: Logger, options: Opt) -> Result<()> {
     Ok(())
 }
 
+const MAX_HEARTBEAT_SIZE: usize = 8 * 1024;
+
 fn do_heartbeat(
     log: Logger,
     addr: SocketAddr,
@@ -161,7 +165,7 @@ fn do_heartbeat(
                 quinn::NewStream::Uni(stream) => stream,
                 quinn::NewStream::Bi(_) => unreachable!(), // config.max_remote_bi_streams is defaulted to 0
             };
-            quinn::read_to_end(stream, 8 * 1024)
+            quinn::read_to_end(stream, MAX_HEARTBEAT_SIZE)
                 .map_err(Into::into)
         })
         .and_then({ let state = state.clone(); move |(_, buf)| {
@@ -185,10 +189,16 @@ fn do_client(log: Logger, state: Rc<RefCell<State>>, conn: quinn::Connection) ->
             .map_err(Into::into)
             .and_then(move |stream| {
                 let state = state.borrow();
-                let state = ms::State {
-                    servers: state.servers.iter().map(|(&address, info)| ms::Server { address, info: &info }).collect(),
-                };
-                tokio::io::write_all(stream, bincode::serialize(&state).unwrap())
+                let mut buf = Vec::new();
+                for (&address, info) in &state.servers {
+                    let start = buf.len();
+                    buf.resize(start + 2, 0);
+                    bincode::serialize_into(&mut buf, &ms::Server { address, info: &info }).unwrap();
+                    let end = buf.len();
+                    // We know this subtraction won't underflow because `MAX_HEARTBEAT_SIZE` is much smaller than 2^16-1
+                    LE::write_u16(&mut buf[start..start+2], (end - start - 2) as u16)
+                }
+                tokio::io::write_all(stream, buf)
                     .and_then(|(stream, _)| tokio::io::shutdown(stream))
                     .map(|_| ())
                     .map_err(Into::into)

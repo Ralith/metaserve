@@ -11,12 +11,6 @@ pub struct Server<'a> {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct State<'a> {
-    #[serde(borrow)]
-    pub servers: Vec<Server<'a>>
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct Heartbeat<'a> {
     pub info: &'a [u8],
 }

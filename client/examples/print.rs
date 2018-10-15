@@ -64,14 +64,15 @@ fn run(options: Opt) -> Result<()> {
             .map_err(|e| -> Error { e.into() })
             .and_then(|conn| {
                 println!(" connected");
-                client::run(conn).map_err(Into::into)
+                client::run(conn)
                     .for_each(|state| {
                         println!("state:");
-                        for (addr, info) in &state.servers {
-                            println!("\t{} {}", addr, String::from_utf8_lossy(&info));
-                        }
-                        Ok(())
+                        state.for_each(|server| {
+                            println!("\t{} {}", server.address, String::from_utf8_lossy(&server.info));
+                            Ok(())
+                        })
                     })
+                    .map_err(Into::into)
             })
     )?;
 
