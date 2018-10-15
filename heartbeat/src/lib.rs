@@ -10,6 +10,9 @@ use std::{io, time::{Instant, Duration}};
 
 use futures::{Future, Stream};
 
+/// ALPN protcol identifier that must be used for heartbeat connections.
+pub use ms::HEARTBEAT_PROTOCOL as PROTOCOL;
+
 #[derive(Debug, Fail)]
 pub enum Error {
     #[fail(display = "{}", _0)]
@@ -18,6 +21,10 @@ pub enum Error {
     Io(io::Error),
 }
 
+/// Transmit a stream of heartbeats to the master server on `connection`.
+///
+/// `connection` *must* be configured to use the protocol ID `PROTOCOL` alone.
+/// `heartbeat` will be polled at most every two seconds.
 pub fn run<S: Stream<Item=T, Error=()>, T: AsRef<[u8]>>(
     connection: quinn::NewClientConnection,
     heartbeats: S,

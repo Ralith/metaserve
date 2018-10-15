@@ -10,6 +10,9 @@ use std::net::SocketAddr;
 
 use futures::{Future, Stream};
 
+/// ALPN protcol identifier that must be used for client connections.
+pub use ms::CLIENT_PROTOCOL as PROTOCOL;
+
 #[derive(Debug, Fail)]
 pub enum Error {
     #[fail(display = "{}", _0)]
@@ -25,6 +28,9 @@ pub struct State {
     pub servers: Vec<(SocketAddr, Vec<u8>)>,
 }
 
+/// Read a stream of state updates from the master server on `connection`.
+///
+/// `connection` *must* be configured to use the protocol ID `PROTOCOL` alone.
 pub fn run(connection: quinn::NewClientConnection) -> impl Stream<Item=State, Error=Error> {
     connection.incoming
         .map_err(Error::Connection)

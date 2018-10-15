@@ -6,7 +6,6 @@ extern crate tokio_current_thread;
 extern crate futures;
 extern crate quinn;
 extern crate tokio;
-extern crate masterserve_proto as ms;
 extern crate masterserve_heartbeat as heartbeat;
 
 use std::{io::{self, Write}, net::ToSocketAddrs};
@@ -50,7 +49,7 @@ fn run(options: Opt) -> Result<()> {
         .next().map_or_else(|| bail!("no such hostname"), Ok)?;
 
     let mut config = quinn::ClientConfigBuilder::new();
-    config.set_protocols(&[ms::HEARTBEAT_PROTOCOL]);
+    config.set_protocols(&[heartbeat::PROTOCOL]);
     config.accept_insecure_certs();
     let config = config.build();
 
