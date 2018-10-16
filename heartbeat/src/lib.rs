@@ -24,6 +24,9 @@ pub enum Error {
 ///
 /// `connection` *must* be configured to use the protocol ID `PROTOCOL` alone.
 /// `heartbeat` will be polled at most every two seconds.
+///
+/// A 2-second delay is inserted after each hearbeat transmit. To transmit heartbeats less frequently--for example, only
+/// when changed--supply a stream that yields heartbeats at the desired rate.
 pub fn run<S: Stream<Item=T, Error=()>, T: AsRef<[u8]>>(
     connection: quinn::NewClientConnection,
     heartbeats: S,
