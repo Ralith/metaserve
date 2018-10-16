@@ -41,6 +41,7 @@ pub fn run(connection: quinn::NewClientConnection) -> impl Stream<Item=impl Stre
 }
 
 /// Information about a live server.
+#[derive(Debug, Clone)]
 pub struct Server {
     /// The address of the server.
     pub address: SocketAddr,

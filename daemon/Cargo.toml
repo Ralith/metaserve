@@ -1,5 +1,5 @@
 [package]
-name = "daemon"
+name = "masterserve-daemon"
 version = "0.1.0"
 authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
 
