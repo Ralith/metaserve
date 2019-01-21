@@ -40,8 +40,9 @@ fn main() {
 fn run(options: Opt) -> Result<()> {
     let mut runtime = tokio::runtime::current_thread::Runtime::new()?;
 
-    let (endpoint, driver, _) = quinn::EndpointBuilder::from_config(quinn::Config {
-        max_remote_uni_streams: 1,
+    let (endpoint, driver, _) = quinn::EndpointBuilder::new(quinn::Config {
+        stream_window_bidi: 0,
+        stream_window_uni: 1,
         ..Default::default()
     }).bind("[::]:0")?;
     runtime.spawn(driver.map_err(|e| eprintln!("IO error: {}", e)));
@@ -53,14 +54,13 @@ fn run(options: Opt) -> Result<()> {
 
     let mut config = quinn::ClientConfigBuilder::new();
     config.set_protocols(&[client::PROTOCOL]);
-    config.accept_insecure_certs();
     let config = config.build();
 
     print!("connecting to {}...", addr);
     io::stdout().flush()?;
 
     runtime.block_on(
-        endpoint.connect(&addr, &config, hostname)?
+        endpoint.connect_with(&config, &addr, hostname)?
             .map_err(|e| -> Error { e.into() })
             .and_then(|conn| {
                 println!(" connected");

@@ -50,14 +50,13 @@ fn run(options: Opt) -> Result<()> {
 
     let mut config = quinn::ClientConfigBuilder::new();
     config.set_protocols(&[heartbeat::PROTOCOL]);
-    config.accept_insecure_certs();
     let config = config.build();
 
     print!("connecting to {}...", addr);
     io::stdout().flush()?;
 
     runtime.block_on(
-        endpoint.connect(&addr, &config, hostname)?
+        endpoint.connect_with(&config, &addr, hostname)?
             .map_err(|e| -> Error { e.into() })
             .and_then(|conn| {
                 println!(" connected");

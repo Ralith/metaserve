@@ -9,18 +9,16 @@ extern crate structopt;
 extern crate slog;
 extern crate bincode;
 extern crate masterserve_proto as ms;
-extern crate rustls;
 extern crate slog_term;
 extern crate byteorder;
 
 use std::{
-    cell::RefCell, collections::HashMap, fmt, fs, io, net::SocketAddr, path::PathBuf, rc::Rc,
+    cell::RefCell, collections::HashMap, fmt, fs, net::SocketAddr, path::PathBuf, rc::Rc,
     time::{Instant, Duration},
 };
 
-use failure::{err_msg, Error, Fail, ResultExt};
+use failure::{Error, Fail, ResultExt};
 use futures::{Future, Stream, future::{self, Loop}};
-use rustls::internal::pemfile;
 use slog::{Drain, Logger};
 use structopt::StructOpt;
 use byteorder::{ByteOrder, LE};
@@ -99,29 +97,30 @@ impl State {
 fn run(log: Logger, options: Opt) -> Result<()> {
     let mut runtime = tokio::runtime::current_thread::Runtime::new()?;
 
-    let mut builder = quinn::EndpointBuilder::from_config(quinn::Config {
-        max_remote_uni_streams: 1,
+    let key = {
+        let key = fs::read(&options.key).context("failed to read private key")?;
+        quinn::PrivateKey::from_pem(&key).context("failed to parse private key")?
+    };
+    let cert_chain = {
+        let cert_chain = fs::read(&options.cert).context("failed to read certificates")?;
+        quinn::CertificateChain::from_pem(&cert_chain).context("failed to parse certificates")?
+    };
+    let mut server = quinn::ServerConfigBuilder::default();
+    server.set_protocols(&[
+        ms::HEARTBEAT_PROTOCOL,
+        ms::CLIENT_PROTOCOL,
+    ]);
+    server.set_certificate(cert_chain, key)?;
+
+    let mut builder = quinn::EndpointBuilder::new(quinn::Config {
+        stream_window_uni: 1,
+        stream_window_bidi: 0,
+        stream_receive_window: ms::MAX_HEARTBEAT_SIZE as u64,
         ..Default::default()
     });
     builder
-        .set_protocols(&[
-            ms::HEARTBEAT_PROTOCOL,
-            ms::CLIENT_PROTOCOL,
-        ]).logger(log.clone())
-        .listen();
-
-    let keys = {
-        let mut reader =
-            io::BufReader::new(fs::File::open(&options.key).context("failed to read private key")?);
-        pemfile::rsa_private_keys(&mut reader).map_err(|_| err_msg("failed to read private key"))?
-    };
-    let cert_chain = {
-        let mut reader = io::BufReader::new(
-            fs::File::open(&options.cert).context("failed to read private key")?,
-        );
-        pemfile::certs(&mut reader).map_err(|_| err_msg("failed to read certificates"))?
-    };
-    builder.set_certificate(cert_chain, keys[0].clone())?;
+        .logger(log.clone())
+        .listen(server.build());
 
     let (_, driver, incoming) = builder.bind(options.listen)?;
 
@@ -130,7 +129,7 @@ fn run(log: Logger, options: Opt) -> Result<()> {
     runtime.spawn(incoming.for_each(move |conn| {
         let remote = conn.connection.remote_address();
         let log = log.new(o!("peer" => remote));
-        match conn.connection.protocol().as_ref().map(|x| -> &[u8] { &x }) {
+        match conn.connection.protocol().as_ref().map(|x| &x[..]) {
             Some(ms::HEARTBEAT_PROTOCOL) => tokio_current_thread::spawn(do_heartbeat(
                 log.clone(),
                 state.clone(),
@@ -161,12 +160,12 @@ fn do_heartbeat(
         .and_then(|stream| {
             let stream = match stream {
                 quinn::NewStream::Uni(stream) => stream,
-                quinn::NewStream::Bi(_) => unreachable!(), // config.max_remote_bi_streams is defaulted to 0
+                quinn::NewStream::Bi(_) => unreachable!(),
             };
             quinn::read_to_end(stream, ms::MAX_HEARTBEAT_SIZE)
-                .or_else(|e| match e {
-                    quinn::ReadError::Finished => Err(None),
-                    _ => Err(Some(e.into())),
+                .map_err(|e| match e {
+                    quinn::ReadError::Finished => None,
+                    _ => Some(e.into()),
                 })
         })
         .and_then({ let state = state.clone(); move |(_, buf)| {
@@ -176,10 +175,10 @@ fn do_heartbeat(
     // Process at most one update per second
         .for_each(|()| tokio::timer::Delay::new(Instant::now() + Duration::from_secs(1)).map_err(|_| unreachable!()))
         .map_err({ let state = state.clone(); move |e| {
+            state.borrow_mut().servers.remove(&addr);
             match e {
                 Some(e) => {
                     info!(log, "heartbeat lost: {reason}", reason=e.pretty().to_string());
-                    state.borrow_mut().servers.remove(&addr);
                 }
                 None => {
                     info!(log, "closing connection due to oversized heartbeat");
