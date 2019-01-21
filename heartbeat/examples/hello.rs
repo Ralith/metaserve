@@ -72,10 +72,12 @@ fn run(options: Opt) -> Result<()> {
             .map_err(|e| -> Error { e.into() })
             .and_then(|conn| {
                 println!(" connected");
-                let beats = stream::repeat(Vec::from(&b"hello, world"[..])).inspect(|_| {
-                    print!(".");
-                    io::stdout().flush().unwrap();
-                });
+                let beats =
+                    stream::unfold(0, |n| Some(Ok((format!("hello, world #{}", n), n + 1))))
+                        .inspect(|_| {
+                            print!(".");
+                            io::stdout().flush().unwrap();
+                        });
                 heartbeat::run(conn, beats).map_err(Into::into)
             }),
     )?;
