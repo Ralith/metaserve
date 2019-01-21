@@ -5,7 +5,7 @@ authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-quinn = { git = "https://github.com/djc/quinn.git" }
+quinn = "0.2"
 tokio = "0.1.11"
 tokio-current-thread = "0.1"
 futures = "0.1"

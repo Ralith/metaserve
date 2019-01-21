@@ -5,7 +5,7 @@ authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-quinn = { git = "https://github.com/djc/quinn.git" }
+quinn = "0.2"
 futures = "0.1"
 masterserve-proto = { path = "../proto" }
 bincode = "1.0.1"
