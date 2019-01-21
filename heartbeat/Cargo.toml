@@ -2,6 +2,7 @@
 name = "masterserve-heartbeat"
 version = "0.1.0"
 authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
+edition = "2018"
 
 [dependencies]
 quinn = { git = "https://github.com/djc/quinn.git" }

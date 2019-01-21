@@ -1,8 +1,6 @@
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
-
 use std::net::SocketAddr;
+
+use serde_derive::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct Server<'a> {

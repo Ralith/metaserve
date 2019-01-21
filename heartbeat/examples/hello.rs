@@ -1,18 +1,13 @@
-#[macro_use]
-extern crate structopt;
-#[macro_use]
-extern crate failure;
-extern crate tokio_current_thread;
-extern crate futures;
-extern crate quinn;
-extern crate tokio;
-extern crate masterserve_heartbeat as heartbeat;
+use masterserve_heartbeat as heartbeat;
 
-use std::{io::{self, Write}, net::ToSocketAddrs};
+use std::{
+    io::{self, Write},
+    net::ToSocketAddrs,
+};
 
-use failure::{Error, err_msg};
+use failure::{bail, err_msg, Error};
+use futures::{stream, Future, Stream};
 use structopt::StructOpt;
-use futures::{Future, Stream, stream};
 
 type Result<T> = ::std::result::Result<T, Error>;
 
@@ -45,8 +40,12 @@ fn run(options: Opt) -> Result<()> {
 
     let hostname = options.master.split(':').next().unwrap();
 
-    let addr = options.master.to_socket_addrs().map_err(|_| err_msg("invalid master server address -- did you forget a port number?"))?
-        .next().map_or_else(|| bail!("no such hostname"), Ok)?;
+    let addr = options
+        .master
+        .to_socket_addrs()
+        .map_err(|_| err_msg("invalid master server address -- did you forget a port number?"))?
+        .next()
+        .map_or_else(|| bail!("no such hostname"), Ok)?;
 
     let mut config = quinn::ClientConfigBuilder::new();
     config.set_protocols(&[heartbeat::PROTOCOL]);
@@ -56,13 +55,17 @@ fn run(options: Opt) -> Result<()> {
     io::stdout().flush()?;
 
     runtime.block_on(
-        endpoint.connect_with(&config, &addr, hostname)?
+        endpoint
+            .connect_with(&config, &addr, hostname)?
             .map_err(|e| -> Error { e.into() })
             .and_then(|conn| {
                 println!(" connected");
-                let beats = stream::repeat(Vec::from(&b"hello, world"[..])).inspect(|_| { print!("."); io::stdout().flush().unwrap(); });
+                let beats = stream::repeat(Vec::from(&b"hello, world"[..])).inspect(|_| {
+                    print!(".");
+                    io::stdout().flush().unwrap();
+                });
                 heartbeat::run(conn, beats).map_err(Into::into)
-            })
+            }),
     )?;
 
     Ok(())

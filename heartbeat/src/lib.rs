@@ -1,16 +1,11 @@
-extern crate quinn;
-extern crate futures;
-extern crate masterserve_proto as ms;
-extern crate tokio;
-#[macro_use]
-extern crate failure;
+use std::{
+    io,
+    time::{Duration, Instant},
+};
 
-use std::{io, time::{Instant, Duration}};
-
+use failure::Fail;
 use futures::{Future, Stream};
-
-pub use ms::HEARTBEAT_PROTOCOL as PROTOCOL;
-pub use ms::MAX_HEARTBEAT_SIZE;
+pub use masterserve_proto::{HEARTBEAT_PROTOCOL as PROTOCOL, MAX_HEARTBEAT_SIZE};
 
 #[derive(Debug, Fail)]
 pub enum Error {
@@ -27,14 +22,16 @@ pub enum Error {
 ///
 /// A 2-second delay is inserted after each hearbeat transmit. To transmit heartbeats less frequently--for example, only
 /// when changed--supply a stream that yields heartbeats at the desired rate.
-pub fn run<S: Stream<Item=T, Error=()>, T: AsRef<[u8]>>(
+pub fn run<S: Stream<Item = T, Error = ()>, T: AsRef<[u8]>>(
     connection: quinn::NewClientConnection,
     heartbeats: S,
-) -> impl Future<Item=(), Error=Error> {
+) -> impl Future<Item = (), Error = Error> {
     heartbeats
         .map_err(|()| None)
         .for_each(move |heartbeat| {
-            connection.connection.open_uni()
+            connection
+                .connection
+                .open_uni()
                 .map_err(|x| Error::Io(x.into()))
                 .and_then(move |stream| {
                     tokio::io::write_all(stream, heartbeat)
@@ -42,7 +39,10 @@ pub fn run<S: Stream<Item=T, Error=()>, T: AsRef<[u8]>>(
                         .map_err(|x| Error::Io(x.into()))
                 })
                 .map_err(Some)
-                .and_then(|_| tokio::timer::Delay::new(Instant::now() + Duration::from_secs(2)).then(|_| Ok(())))
+                .and_then(|_| {
+                    tokio::timer::Delay::new(Instant::now() + Duration::from_secs(2))
+                        .then(|_| Ok(()))
+                })
         })
         .or_else(|e| e.map_or(Ok(()), Err))
 }

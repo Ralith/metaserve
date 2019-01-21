@@ -1,27 +1,22 @@
-extern crate failure;
-extern crate futures;
-extern crate quinn;
-extern crate tokio;
-extern crate tokio_current_thread;
-#[macro_use]
-extern crate structopt;
-#[macro_use]
-extern crate slog;
-extern crate bincode;
-extern crate masterserve_proto as ms;
-extern crate slog_term;
-extern crate byteorder;
-
 use std::{
-    cell::RefCell, collections::HashMap, fmt, fs, net::SocketAddr, path::PathBuf, rc::Rc,
-    time::{Instant, Duration},
+    cell::RefCell,
+    collections::HashMap,
+    fmt, fs,
+    net::SocketAddr,
+    path::PathBuf,
+    rc::Rc,
+    time::{Duration, Instant},
 };
 
-use failure::{Error, Fail, ResultExt};
-use futures::{Future, Stream, future::{self, Loop}};
-use slog::{Drain, Logger};
-use structopt::StructOpt;
 use byteorder::{ByteOrder, LE};
+use failure::{Error, Fail, ResultExt};
+use futures::{
+    future::{self, Loop},
+    Future, Stream,
+};
+use masterserve_proto as ms;
+use slog::{info, o, Drain, Logger};
+use structopt::StructOpt;
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -106,10 +101,7 @@ fn run(log: Logger, options: Opt) -> Result<()> {
         quinn::CertificateChain::from_pem(&cert_chain).context("failed to parse certificates")?
     };
     let mut server = quinn::ServerConfigBuilder::default();
-    server.set_protocols(&[
-        ms::HEARTBEAT_PROTOCOL,
-        ms::CLIENT_PROTOCOL,
-    ]);
+    server.set_protocols(&[ms::HEARTBEAT_PROTOCOL, ms::CLIENT_PROTOCOL]);
     server.set_certificate(cert_chain, key)?;
 
     let mut builder = quinn::EndpointBuilder::new(quinn::Config {
@@ -118,9 +110,7 @@ fn run(log: Logger, options: Opt) -> Result<()> {
         stream_receive_window: ms::MAX_HEARTBEAT_SIZE as u64,
         ..Default::default()
     });
-    builder
-        .logger(log.clone())
-        .listen(server.build());
+    builder.logger(log.clone()).listen(server.build());
 
     let (_, driver, incoming) = builder.bind(options.listen)?;
 
@@ -130,12 +120,12 @@ fn run(log: Logger, options: Opt) -> Result<()> {
         let remote = conn.connection.remote_address();
         let log = log.new(o!("peer" => remote));
         match conn.connection.protocol().as_ref().map(|x| &x[..]) {
-            Some(ms::HEARTBEAT_PROTOCOL) => tokio_current_thread::spawn(do_heartbeat(
-                log.clone(),
-                state.clone(),
-                conn
-            )),
-            Some(ms::CLIENT_PROTOCOL) => tokio_current_thread::spawn(do_client(log.clone(), state.clone(), conn)),
+            Some(ms::HEARTBEAT_PROTOCOL) => {
+                tokio_current_thread::spawn(do_heartbeat(log.clone(), state.clone(), conn))
+            }
+            Some(ms::CLIENT_PROTOCOL) => {
+                tokio_current_thread::spawn(do_client(log.clone(), state.clone(), conn))
+            }
             None => {
                 info!(log, "attempted connection with missing ALPN");
             }
@@ -156,43 +146,61 @@ fn do_heartbeat(
     info!(log, "heartbeat established");
     let addr = conn.connection.remote_address();
     let connection = conn.connection;
-    conn.incoming.map_err(|e| -> Option<Error> { Some(e.context("connection lost").into()) })
+    conn.incoming
+        .map_err(|e| -> Option<Error> { Some(e.context("connection lost").into()) })
         .and_then(|stream| {
             let stream = match stream {
                 quinn::NewStream::Uni(stream) => stream,
                 quinn::NewStream::Bi(_) => unreachable!(),
             };
-            quinn::read_to_end(stream, ms::MAX_HEARTBEAT_SIZE)
-                .map_err(|e| match e {
-                    quinn::ReadError::Finished => None,
-                    _ => Some(e.into()),
-                })
+            quinn::read_to_end(stream, ms::MAX_HEARTBEAT_SIZE).map_err(|e| match e {
+                quinn::ReadError::Finished => None,
+                _ => Some(e.into()),
+            })
         })
-        .and_then({ let state = state.clone(); move |(_, buf)| {
-            state.borrow_mut().servers.insert(addr, buf.to_vec());
-            Ok(())
-        }})
-    // Process at most one update per second
-        .for_each(|()| tokio::timer::Delay::new(Instant::now() + Duration::from_secs(1)).map_err(|_| unreachable!()))
-        .map_err({ let state = state.clone(); move |e| {
-            state.borrow_mut().servers.remove(&addr);
-            match e {
-                Some(e) => {
-                    info!(log, "heartbeat lost: {reason}", reason=e.pretty().to_string());
-                }
-                None => {
-                    info!(log, "closing connection due to oversized heartbeat");
-                    connection.close(1, b"oversized heartbeat");
+        .and_then({
+            let state = state.clone();
+            move |(_, buf)| {
+                state.borrow_mut().servers.insert(addr, buf.to_vec());
+                Ok(())
+            }
+        })
+        // Process at most one update per second
+        .for_each(|()| {
+            tokio::timer::Delay::new(Instant::now() + Duration::from_secs(1))
+                .map_err(|_| unreachable!())
+        })
+        .map_err({
+            let state = state.clone();
+            move |e| {
+                state.borrow_mut().servers.remove(&addr);
+                match e {
+                    Some(e) => {
+                        info!(
+                            log,
+                            "heartbeat lost: {reason}",
+                            reason = e.pretty().to_string()
+                        );
+                    }
+                    None => {
+                        info!(log, "closing connection due to oversized heartbeat");
+                        connection.close(1, b"oversized heartbeat");
+                    }
                 }
             }
-        }})
+        })
 }
 
-fn do_client(log: Logger, state: Rc<RefCell<State>>, conn: quinn::NewConnection) -> impl Future<Item = (), Error = ()> {
+fn do_client(
+    log: Logger,
+    state: Rc<RefCell<State>>,
+    conn: quinn::NewConnection,
+) -> impl Future<Item = (), Error = ()> {
     info!(log, "client connected");
     future::loop_fn((), move |()| {
         let state = state.clone();
-        conn.connection.open_uni()
+        conn.connection
+            .open_uni()
             .map_err(Into::into)
             .and_then(move |stream| {
                 let state = state.borrow();
@@ -200,20 +208,35 @@ fn do_client(log: Logger, state: Rc<RefCell<State>>, conn: quinn::NewConnection)
                 for (&address, info) in &state.servers {
                     let start = buf.len();
                     buf.resize(start + 2, 0);
-                    bincode::serialize_into(&mut buf, &ms::Server { address, info: &info }).unwrap();
+                    bincode::serialize_into(
+                        &mut buf,
+                        &ms::Server {
+                            address,
+                            info: &info,
+                        },
+                    )
+                    .unwrap();
                     let end = buf.len();
                     // We know this subtraction won't underflow because `MAX_HEARTBEAT_SIZE` is much smaller than 2^16-1
-                    LE::write_u16(&mut buf[start..start+2], (end - start - 2) as u16)
+                    LE::write_u16(&mut buf[start..start + 2], (end - start - 2) as u16)
                 }
                 tokio::io::write_all(stream, buf)
                     .and_then(|(stream, _)| tokio::io::shutdown(stream))
                     .map(|_| ())
                     .map_err(Into::into)
             })
-        // Send at most one update per second
-            .and_then(|()| tokio::timer::Delay::new(Instant::now() + Duration::from_secs(1)).map_err(|_| unreachable!()))
+            // Send at most one update per second
+            .and_then(|()| {
+                tokio::timer::Delay::new(Instant::now() + Duration::from_secs(1))
+                    .map_err(|_| unreachable!())
+            })
             .map(|()| Loop::Continue(()))
-    }).map_err(move |e: Error| {
-        info!(log, "client lost: {reason}", reason=e.pretty().to_string());
+    })
+    .map_err(move |e: Error| {
+        info!(
+            log,
+            "client lost: {reason}",
+            reason = e.pretty().to_string()
+        );
     })
 }

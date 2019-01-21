@@ -1,18 +1,12 @@
-#[macro_use]
-extern crate structopt;
-#[macro_use]
-extern crate failure;
-extern crate tokio_current_thread;
-extern crate futures;
-extern crate quinn;
-extern crate tokio;
-extern crate masterserve_client as client;
+use std::{
+    io::{self, Write},
+    net::ToSocketAddrs,
+};
 
-use std::{io::{self, Write}, net::ToSocketAddrs};
-
-use failure::{Error, err_msg};
-use structopt::StructOpt;
+use failure::{err_msg, Error};
 use futures::{Future, Stream};
+use masterserve_client as client;
+use structopt::StructOpt;
 
 type Result<T> = ::std::result::Result<T, Error>;
 
@@ -44,13 +38,18 @@ fn run(options: Opt) -> Result<()> {
         stream_window_bidi: 0,
         stream_window_uni: 1,
         ..Default::default()
-    }).bind("[::]:0")?;
+    })
+    .bind("[::]:0")?;
     runtime.spawn(driver.map_err(|e| eprintln!("IO error: {}", e)));
 
     let hostname = options.master.split(':').next().unwrap();
 
-    let addr = options.master.to_socket_addrs().map_err(|_| err_msg("invalid master server address -- did you forget a port number?"))?
-        .next().map_or_else(|| bail!("no such hostname"), Ok)?;
+    let addr = options
+        .master
+        .to_socket_addrs()
+        .map_err(|_| err_msg("invalid master server address -- did you forget a port number?"))?
+        .next()
+        .map_or_else(|| Err(err_msg("no such hostname")), Ok)?;
 
     let mut config = quinn::ClientConfigBuilder::new();
     config.set_protocols(&[client::PROTOCOL]);
@@ -60,7 +59,8 @@ fn run(options: Opt) -> Result<()> {
     io::stdout().flush()?;
 
     runtime.block_on(
-        endpoint.connect_with(&config, &addr, hostname)?
+        endpoint
+            .connect_with(&config, &addr, hostname)?
             .map_err(|e| -> Error { e.into() })
             .and_then(|conn| {
                 println!(" connected");
@@ -68,12 +68,16 @@ fn run(options: Opt) -> Result<()> {
                     .for_each(|state| {
                         println!("state:");
                         state.for_each(|server| {
-                            println!("\t{} {}", server.address, String::from_utf8_lossy(&server.info));
+                            println!(
+                                "\t{} {}",
+                                server.address,
+                                String::from_utf8_lossy(&server.info)
+                            );
                             Ok(())
                         })
                     })
                     .map_err(Into::into)
-            })
+            }),
     )?;
 
     Ok(())
