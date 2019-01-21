@@ -1,9 +1,11 @@
 use std::{
+    fs,
     io::{self, Write},
     net::ToSocketAddrs,
+    path::PathBuf,
 };
 
-use failure::{err_msg, Error};
+use failure::{err_msg, Error, ResultExt};
 use futures::{Future, Stream};
 use masterserve_client as client;
 use structopt::StructOpt;
@@ -16,6 +18,9 @@ struct Opt {
     /// Master server to connect to
     #[structopt(default_value = "localhost:4433")]
     master: String,
+    /// Additional certificate authority to trust, in DER format
+    #[structopt(parse(from_os_str), long = "ca")]
+    ca: Option<PathBuf>,
 }
 
 fn main() {
@@ -53,6 +58,13 @@ fn run(options: Opt) -> Result<()> {
 
     let mut config = quinn::ClientConfigBuilder::new();
     config.set_protocols(&[client::PROTOCOL]);
+    if let Some(ref ca) = options.ca {
+        let ca = fs::read(ca).context("reading CA cert")?;
+        let ca = quinn::Certificate::from_der(&ca).context("parsing CA cert")?;
+        config
+            .add_certificate_authority(ca)
+            .context("using CA cert")?;
+    }
     let config = config.build();
 
     print!("connecting to {}...", addr);

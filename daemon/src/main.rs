@@ -47,10 +47,10 @@ impl ErrorExt for Error {
 #[derive(StructOpt, Debug)]
 #[structopt(name = "masterserve")]
 struct Opt {
-    /// TLS private key in PEM format
+    /// TLS private key in DER format
     #[structopt(parse(from_os_str), short = "k", long = "key")]
     key: PathBuf,
-    /// TLS certificate in PEM format
+    /// TLS certificate in DER format
     #[structopt(parse(from_os_str), short = "c", long = "cert")]
     cert: PathBuf,
 
@@ -94,11 +94,13 @@ fn run(log: Logger, options: Opt) -> Result<()> {
 
     let key = {
         let key = fs::read(&options.key).context("failed to read private key")?;
-        quinn::PrivateKey::from_pem(&key).context("failed to parse private key")?
+        quinn::PrivateKey::from_der(&key).context("failed to parse private key")?
     };
     let cert_chain = {
         let cert_chain = fs::read(&options.cert).context("failed to read certificates")?;
-        quinn::CertificateChain::from_pem(&cert_chain).context("failed to parse certificates")?
+        quinn::CertificateChain::from_certs(vec![
+            quinn::Certificate::from_der(&cert_chain).context("failed to parse certificates")?
+        ])
     };
     let mut server = quinn::ServerConfigBuilder::default();
     server.set_protocols(&[ms::HEARTBEAT_PROTOCOL, ms::CLIENT_PROTOCOL]);
