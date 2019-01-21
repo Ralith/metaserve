@@ -3,15 +3,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-use failure::Fail;
+use err_derive::Error;
 use futures::{Future, Stream};
 pub use masterserve_proto::{HEARTBEAT_PROTOCOL as PROTOCOL, MAX_HEARTBEAT_SIZE};
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum Error {
-    #[fail(display = "{}", _0)]
+    #[error(display = "{}", _0)]
     Connect(quinn::ConnectError),
-    #[fail(display = "{}", _0)]
+    #[error(display = "{}", _0)]
     Io(io::Error),
 }
 

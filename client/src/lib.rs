@@ -2,20 +2,20 @@ use std::net::SocketAddr;
 
 use byteorder::{ByteOrder, LE};
 use bytes::{Bytes, BytesMut};
-use failure::Fail;
+use err_derive::Error;
 use futures::{Async, Poll, Stream};
 use masterserve_proto as ms;
 use quinn::Read;
 
 pub use self::ms::CLIENT_PROTOCOL as PROTOCOL;
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum Error {
-    #[fail(display = "{}", _0)]
+    #[error(display = "{}", _0)]
     Connection(quinn::ConnectionError),
-    #[fail(display = "{}", _0)]
+    #[error(display = "{}", _0)]
     Io(quinn::ReadError),
-    #[fail(display = "malformed data: {}", _0)]
+    #[error(display = "malformed data: {}", _0)]
     Parse(bincode::Error),
 }
 
