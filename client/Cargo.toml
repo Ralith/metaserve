@@ -17,7 +17,7 @@ byteorder = "1.2"
 [dev-dependencies]
 tokio-current-thread = "0.1"
 structopt = "0.2.12"
-failure = "0.1"
+err-ctx = "0.1"
 
 [[example]]
 name = "print"

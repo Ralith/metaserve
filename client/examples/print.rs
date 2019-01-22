@@ -5,12 +5,13 @@ use std::{
     path::PathBuf,
 };
 
-use failure::{err_msg, Error, ResultExt};
+use err_ctx::ResultExt;
 use futures::{Future, Stream};
 use masterserve_client as client;
 use structopt::StructOpt;
 
-type Result<T> = ::std::result::Result<T, Error>;
+type Error = Box<std::error::Error>;
+type Result<T> = std::result::Result<T, Error>;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "print")]
@@ -52,18 +53,18 @@ fn run(options: Opt) -> Result<()> {
     let addr = options
         .master
         .to_socket_addrs()
-        .map_err(|_| err_msg("invalid master server address -- did you forget a port number?"))?
+        .map_err(|_| "invalid master server address -- did you forget a port number?")?
         .next()
-        .map_or_else(|| Err(err_msg("no such hostname")), Ok)?;
+        .map_or_else(|| Err("no such hostname"), Ok)?;
 
     let mut config = quinn::ClientConfigBuilder::new();
     config.set_protocols(&[client::PROTOCOL]);
     if let Some(ref ca) = options.ca {
-        let ca = fs::read(ca).context("reading CA cert")?;
-        let ca = quinn::Certificate::from_der(&ca).context("parsing CA cert")?;
+        let ca = fs::read(ca).ctx("reading CA cert")?;
+        let ca = quinn::Certificate::from_der(&ca).ctx("parsing CA cert")?;
         config
             .add_certificate_authority(ca)
-            .context("using CA cert")?;
+            .ctx("using CA cert")?;
     }
     let config = config.build();
 

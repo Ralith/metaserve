@@ -1,7 +1,7 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
-    fmt, fs,
+    fs,
     net::SocketAddr,
     path::PathBuf,
     rc::Rc,
@@ -9,7 +9,7 @@ use std::{
 };
 
 use byteorder::{ByteOrder, LE};
-use failure::{Error, Fail, ResultExt};
+use err_ctx::{ResultExt, ErrorExt};
 use futures::{
     future::{self, Loop},
     Future, Stream,
@@ -18,31 +18,8 @@ use masterserve_proto as ms;
 use slog::{info, o, Drain, Logger};
 use structopt::StructOpt;
 
+type Error = Box<std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
-
-pub struct PrettyErr<'a>(&'a Fail);
-impl<'a> fmt::Display for PrettyErr<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)?;
-        let mut x: &Fail = self.0;
-        while let Some(cause) = x.cause() {
-            f.write_str(": ")?;
-            fmt::Display::fmt(&cause, f)?;
-            x = cause;
-        }
-        Ok(())
-    }
-}
-
-pub trait ErrorExt {
-    fn pretty(&self) -> PrettyErr;
-}
-
-impl ErrorExt for Error {
-    fn pretty(&self) -> PrettyErr {
-        PrettyErr(self.as_fail())
-    }
-}
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "masterserve")]
@@ -68,7 +45,7 @@ fn main() {
             .build()
             .fuse();
         if let Err(e) = run(Logger::root(drain, o!()), opt) {
-            eprintln!("ERROR: {}", e.pretty());
+            eprintln!("ERROR: {}", e);
             1
         } else {
             0
@@ -93,13 +70,13 @@ fn run(log: Logger, options: Opt) -> Result<()> {
     let mut runtime = tokio::runtime::current_thread::Runtime::new()?;
 
     let key = {
-        let key = fs::read(&options.key).context("failed to read private key")?;
-        quinn::PrivateKey::from_der(&key).context("failed to parse private key")?
+        let key = fs::read(&options.key).ctx("failed to read private key")?;
+        quinn::PrivateKey::from_der(&key).ctx("failed to parse private key")?
     };
     let cert_chain = {
-        let cert_chain = fs::read(&options.cert).context("failed to read certificates")?;
+        let cert_chain = fs::read(&options.cert).ctx("failed to read certificates")?;
         quinn::CertificateChain::from_certs(vec![
-            quinn::Certificate::from_der(&cert_chain).context("failed to parse certificates")?
+            quinn::Certificate::from_der(&cert_chain).ctx("failed to parse certificates")?
         ])
     };
     let mut server = quinn::ServerConfigBuilder::default();
@@ -149,7 +126,7 @@ fn do_heartbeat(
     let addr = conn.connection.remote_address();
     let connection = conn.connection;
     conn.incoming
-        .map_err(|e| -> Option<Error> { Some(e.context("connection lost").into()) })
+        .map_err(|e| -> Option<Error> { Some(e.ctx("connection lost").into()) })
         .and_then(|stream| {
             let stream = match stream {
                 quinn::NewStream::Uni(stream) => stream,
@@ -181,7 +158,7 @@ fn do_heartbeat(
                         info!(
                             log,
                             "heartbeat lost: {reason}",
-                            reason = e.pretty().to_string()
+                            reason = e.to_string()
                         );
                     }
                     None => {
@@ -238,7 +215,7 @@ fn do_client(
         info!(
             log,
             "client lost: {reason}",
-            reason = e.pretty().to_string()
+            reason = e.to_string()
         );
     })
 }
