@@ -1,20 +1,18 @@
 [package]
-name = "masterserve-heartbeat"
+name = "metaserve-heartbeat"
 version = "0.1.0"
 authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-quinn = "0.2"
-futures = "0.1"
-masterserve-proto = { path = "../proto" }
-tokio = "0.1"
-err-derive = "0.1"
+quinn = { version = "0.8", default-features = false }
+metaserve-proto = { path = "../proto" }
+bincode = "1.0.1"
+tokio = { version = "1.17", default-features = false, features = ["time"] }
 
 [dev-dependencies]
-tokio-current-thread = "0.1"
-structopt = "0.2.12"
-err-ctx = "0.1"
-
-[[example]]
-name = "hello"
+quinn = { version = "0.8", default-features = false, features = ["tls-rustls", "ring"] }
+tokio = { version = "1.17", default-features = false, features = ["macros", "rt"] }
+anyhow = "1"
+clap = { version = "3.1", features = ["derive"] }
+rustls = "0.20"

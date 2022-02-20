@@ -1,2 +1,3 @@
 [workspace]
-members = ["daemon", "proto", "heartbeat", "client"]
+resolver = "2"
+members = ["daemon", "proto", "client", "heartbeat"]

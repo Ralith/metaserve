@@ -1,9 +1,9 @@
 [package]
-name = "masterserve-proto"
+name = "metaserve-proto"
 version = "0.1.0"
 authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-serde = "1.0.80"
-serde_derive = "1.0"
+serde = { version = "1.0.80", features = ["derive"] }
+

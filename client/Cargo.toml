@@ -1,23 +1,20 @@
 [package]
-name = "masterserve-client"
+name = "metaserve-client"
 version = "0.1.0"
 authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-quinn = "0.2"
-futures = "0.1"
-masterserve-proto = { path = "../proto" }
+quinn = { version = "0.8", default-features = false }
+metaserve-proto = { path = "../proto" }
 bincode = "1.0.1"
-tokio = "0.1"
-err-derive = "0.1"
-bytes = "0.4"
-byteorder = "1.2"
+tokio = { version = "1.17", default-features = false }
+thiserror = "1"
+futures-util = "0.3"
 
 [dev-dependencies]
-tokio-current-thread = "0.1"
-structopt = "0.2.12"
-err-ctx = "0.1"
-
-[[example]]
-name = "print"
+quinn = { version = "0.8", default-features = false, features = ["tls-rustls", "ring"] }
+tokio = { version = "1.17", default-features = false, features = ["macros", "rt"] }
+anyhow = "1"
+clap = { version = "3.1", features = ["derive"] }
+rustls = "0.20"

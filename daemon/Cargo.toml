@@ -1,18 +1,21 @@
 [package]
-name = "masterserve-daemon"
+name = "metaserve-daemon"
 version = "0.1.0"
 authors = ["Benjamin Saunders <ben.e.saunders@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-quinn = "0.2"
-tokio = "0.1.11"
-tokio-current-thread = "0.1"
-futures = "0.1"
-masterserve-proto = { path = "../proto" }
-slog = "2.1"
-slog-term = "2"
-structopt = "0.2.12"
-err-ctx = "0.1"
+quinn = { version = "0.8", default-features = false, features = ["tls-rustls", "ring"] }
+rustls = "0.20"
+metaserve-proto = { path = "../proto" }
+tokio = { version = "1.17", default-features = false, features = ["macros", "rt-multi-thread", "time", "sync"] }
+anyhow = "1"
+tracing = "0.1.31"
+tracing-subscriber = { version = "0.3.1", default-features = false, features = ["env-filter", "smallvec", "fmt", "ansi", "parking_lot"] }
+tracing-journald = "0.2.3"
+tracing-appender = "0.2"
+clap = { version = "3.1", features = ["derive"] }
 bincode = "1.0.1"
-byteorder = "1.2"
+slab = "0.4"
+indexmap = "1.0"
+futures-util = "0.3"

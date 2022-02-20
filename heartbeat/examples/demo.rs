@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
-use metaserve_client as client;
+use metaserve_heartbeat::Heartbeat;
 
 #[derive(Parser, Debug)]
 #[clap(name = "print")]
@@ -47,7 +47,7 @@ async fn run(options: Opt) -> Result<()> {
         .with_root_certificates(roots)
         .with_no_client_auth();
 
-    client_crypto.alpn_protocols = vec![client::proto::PROTOCOL.into()];
+    client_crypto.alpn_protocols = vec![metaserve_heartbeat::proto::PROTOCOL.into()];
     let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
     Arc::get_mut(&mut client_config.transport)
         .unwrap()
@@ -73,23 +73,12 @@ async fn run(options: Opt) -> Result<()> {
         .connect_with(client_config, addr, hostname)?
         .await?;
     println!(" connected");
-    let mut client = client::Client::new(conn);
+
+    let mut heartbeat = Heartbeat::new(conn, 1234).await?;
+    let mut i = 0;
     loop {
-        let msg = match client.recv().await {
-            Ok(x) => x,
-            Err(e) => return Err(e.into()),
-        };
-        println!("servers:");
-        for server in msg.servers {
-            print!("\t{}: ", server.id);
-            match server.event {
-                client::proto::Event::Update(addr, state) => {
-                    println!("{} {}", addr, String::from_utf8_lossy(&state));
-                }
-                client::proto::Event::Shutdown => {
-                    println!("shutdown");
-                }
-            }
-        }
+        let msg = format!("heartbeat #{}", i);
+        i += 1;
+        heartbeat.send(msg.as_bytes()).await?;
     }
 }
